@@ -4,7 +4,7 @@ This REST API privdes endpoints to create, modify, retrieve, delete and to share
 
 ## Warnings
 
-At the moment there are no restrictions for clients to create a user on their own so be careful in production use.
+At the moment there are no restrictions for clients to create a user on their own so be careful in production use. This software is not 100% tested and should be used carefully in production.
 
 ## Installation
 
@@ -88,3 +88,17 @@ This endpoint also returns statusmessage + statuscode as JSON and normal HTTP st
 ```
 Freddy now gains access permissions for that list.
 - Get todo's of a specific todolist (GET: /api/todos/{list_id}: This endpoint needs a query parameter. It requires the todolist ID of the list you want to get the todo's of. Example: /api/todos/1.
+
+## License
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+
