@@ -1,7 +1,8 @@
 <?php
 
-use Rememberly\Persistence\DatabaseOperator;
+use Rememberly\Persistence\TodolistManager;
 use Rememberly\Authentication\TokenManager;
+use Rememberly\Persistence\UserManager;
 use Slim\Http\Request;
 use Slim\Http\Response;
 use \Firebase\JWT\JWT;
@@ -10,33 +11,17 @@ use \Firebase\JWT\JWT;
 $app->post('/api/todo/new', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
     $userID = $token['user_id'];
-    $todolist_permissions = $token['todolistPermissions'];
+    $todolistPermissions = $token['todolistPermissions'];
     $input = $request->getParsedBody();
-    $list_id = $input['list_id'];
-    $expires_on = $input['expires_on'];
-    $todo_text = $input['todo_text'];
-    $databaseOperator = new DatabaseOperator($this->db);
-    $responseObject;
-    if (in_array($list_id, $todolist_permissions)) {
-      if (isset($expires_on)) {
-        $this->logger->info("Insert todo with expiration");
-        $responseObject = $databaseOperator->insertTodoWithExpiration($list_id,
-         $expires_on, $todo_text);
-      } else {
-        $this->logger->info("Insert todo");
-        $responseObject = $databaseOperator->insertTodo($list_id, $todo_text);
-      }
-    } else {
-      $responseObject->message = "Not authorized!";
-      return $this->response->withJson($responseObject);
-    }
-    return $this->response->withJson($responseObject);
-});
+    $todolistManager = new TodolistManager($this->db);
+    $todolistManager->insertTodo($input, $todolistPermissions);
+    return $this->response->withJson($todolistManager->getResponse(), $todolistManager->getHttpCode());
+    });
 // update todo (name, check status,..)
 $app->put('/api/todo/update', function (Request $request, Response $response, array $args) {
   $token = $request->getAttribute("decoded_token_data");
   $userID = $token['user_id'];
-  $todolist_permissions = $token['todolistPermissions'];
+  $todolistPermissions = $token['todolistPermissions'];
   $input = $request->getParsedBody();
   $list_id = $input['list_id'];
   $expires_on = $input['expires_on'];
@@ -46,7 +31,7 @@ $app->put('/api/todo/update', function (Request $request, Response $response, ar
   $this->logger->info("Update Todo with Check Status: " . $is_checked);
   $databaseOperator = new DatabaseOperator($this->db);
   $responseObject;
-  if (in_array($list_id, $todolist_permissions)) {
+  if (in_array($list_id, $todolistPermissions)) {
     if (isset($expires_on)) {
       $this->logger->info("Update todo with expiration");
       $responseObject = $databaseOperator->updateTodoWithExpiration($expires_on, $todo_text, $todo_id, $is_checked, $list_id);
@@ -82,11 +67,11 @@ $app->post('/api/tokenrefresh', function (Request $request, Response $response, 
    $username = $token['username'];
    // Maybe the permissions have changed
    $databaseOperator = new DatabaseOperator($this->db);
-   $todolist_permissions = $databaseOperator->getUserTodolistPermissions($userID);
+   $todolistPermissions = $databaseOperator->getUserTodolistPermissions($userID);
    $noticesPermissions = $databaseOperator->getUserNoticesPermissions($userID);
    $androidAppID = $token['androidAppID'];
    $tokenManager = new TokenManager($this->get('settings'));
-   $token = $tokenManager->createUserToken($userID, $username, $todolist_permissions, $noticesPermissions, $androidAppID);
+   $token = $tokenManager->createUserToken($userID, $username, $todolistPermissions, $noticesPermissions, $androidAppID);
    return $this->response->withJson(['token' => $token]);
 });
 // Endpoint should return Statuscode 401 if token is no more valid
@@ -192,9 +177,9 @@ $app->post('/api/todolist/share', function (Request $request, Response $response
     $parsedBody = $request->getParsedBody();
     $list_id = $parsedBody['list_id'];
     $username = $parsedBody['username'];
-    $todolist_permissions = $token['todolistPermissions'];
+    $todolistPermissions = $token['todolistPermissions'];
     $responseObject;
-    if (in_array($list_id, $todolist_permissions)) {
+    if (in_array($list_id, $todolistPermissions)) {
       // set permissions to new user
       try {
       $databaseOperator = new DatabaseOperator($this->db);
@@ -259,13 +244,13 @@ $app->get('/api/todolist/[{list_id}]', function (Request $request, Response $res
 $app->get('/api/todolists', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
         $userID = $token['user_id'];
-        $todolist_permissions = $token['todolistPermissions'];
-        $in  = str_repeat('?,', count($todolist_permissions) - 1) . '?';
-        $this->logger->info("User has permission to access lists: " . print_r($todolist_permissions, true));
+        $todolistPermissions = $token['todolistPermissions'];
+        $in  = str_repeat('?,', count($todolistPermissions) - 1) . '?';
+        $this->logger->info("User has permission to access lists: " . print_r($todolistPermissions, true));
         $sql = "SELECT * FROM todolists WHERE list_id IN ($in)";
         $sth = $this->db->prepare($sql);
         try {
-        $sth->execute($todolist_permissions);
+        $sth->execute($todolistPermissions);
         $todolist = $sth->fetchAll(); // false if none found or no permission
         return $this->response->withJson($todolist);
       } catch (PDOException $pdoe) {
@@ -323,14 +308,14 @@ $app->get('/login', function (Request $request, Response $response, array $args)
     $username = $request->getServerParam('PHP_AUTH_USER');
     if (isset($username)) {
         $this->logger->info("Authenticated user: " . $username);
-        $databaseOperator = new DatabaseOperator($this->db);
+        $userManager = new UserManager($this->db);
         $tokenManager = new TokenManager($this->get('settings'));
-        $userID = $databaseOperator->getUserID($username);
-        $todolist_permissions = $databaseOperator->getUserTodolistPermissions($userID);
-        $notices_permissions = $databaseOperator->getUserNoticesPermissions($userID);
-        $androidAppID = $databaseOperator->getAndroidAppID($userID);
+        $userID = $userManager->getUserID($username);
+        $todolistPermissions = $userManager->getUserTodolistPermissions($userID);
+        $notices_permissions = $userManager->getUserNoticesPermissions($userID);
+        $androidAppID = $userManager->getAndroidAppID($userID);
         $token = $tokenManager->createUserToken($userID, $username,
-         $todolist_permissions, $notices_permissions, $androidAppID);
+         $todolistPermissions, $notices_permissions, $androidAppID);
         return $this->response->withJson(['token' => $token]);
     }
 });
