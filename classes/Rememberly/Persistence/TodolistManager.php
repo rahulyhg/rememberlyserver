@@ -35,16 +35,16 @@ use Rememberly\Validation\BodyValidator;
       {
         if (BodyValidator::validateNewTodo($input))
         {
-          $listID = $input['list_id'];
+          $listID = $input['listID'];
           if (in_array($listID, $todolistPermissions))
           {
             if ($this->todoWithExpiration($input)) {
-              $expires_on = $input['expires_on'];
-              $todo_text = $input['todo_text'];
-              $this->insertTodoWithExpiration($listID, $expires_on, $todo_text);
+              $expiresOn = $input['expiresOn'];
+              $todoText = $input['todoText'];
+              $this->insertTodoWithExpiration($listID, $expiresOn, $todoText);
             } else {
-            $todo_text = $input['todo_text'];
-            $this->insertTodoWithoutExpiration($listID, $todo_text);
+            $todoText = $input['todoText'];
+            $this->insertTodoWithoutExpiration($listID, $todoText);
           }
         } else {
           $this->setResponse(array('message' => "No permissions.", 'status' => 403));
@@ -55,19 +55,19 @@ use Rememberly\Validation\BodyValidator;
         $this->setHttpCode(400);
       }
     }
-      private function insertTodoWithExpiration($listID, $expires_on, $todo_text) {
+      private function insertTodoWithExpiration($listID, $expiresOn, $todoText) {
       try {
           $checkedDefault = 0;
-          $sql = "INSERT INTO todos (list_id, expires_on, todo_text, is_checked)
-          VALUES (:list_id, :expires_on, :todo_text, :is_checked)";
+          $sql = "INSERT INTO todos (listID, expiresOn, todoText, isChecked)
+          VALUES (:listID, :expiresOn, :todoText, :isChecked)";
           $sth = $this->dbconnection->prepare($sql);
-          $sth->bindParam("list_id", $listID);
-          $sth->bindValue("expires_on", $expires_on);
-          $sth->bindParam("todo_text", $todo_text);
-          $sth->bindParam("is_checked", $checkedDefault);
+          $sth->bindParam("listID", $listID);
+          $sth->bindValue("expiresOn", $expiresOn);
+          $sth->bindParam("todoText", $todoText);
+          $sth->bindParam("isChecked", $checkedDefault);
           $sth->execute();
           $newTodoID = $this->dbconnection->lastInsertId();
-          $sql ="SELECT * FROM todos WHERE todo_id=:newTodoID";
+          $sql ="SELECT * FROM todos WHERE todoID=:newTodoID";
           $sth = $this->dbconnection->prepare($sql);
           $sth->bindParam("newTodoID", $newTodoID);
           $sth->execute();
@@ -81,18 +81,18 @@ use Rememberly\Validation\BodyValidator;
               $this->isSuccess(false);
       }
     }
-    private function insertTodoWithoutExpiration($listID, $todo_text) {
+    private function insertTodoWithoutExpiration($listID, $todoText) {
       try {
           $checkedDefault = 0;
-          $sql = "INSERT INTO todos (list_id, todo_text, is_checked)
-          VALUES (:list_id, :todo_text, :is_checked)";
+          $sql = "INSERT INTO todos (listID, todoText, isChecked)
+          VALUES (:listID, :todoText, :isChecked)";
           $sth = $this->dbconnection->prepare($sql);
-          $sth->bindParam("list_id", $listID);
-          $sth->bindParam("todo_text", $todo_text);
-          $sth->bindParam("is_checked", $checkedDefault);
+          $sth->bindParam("listID", $listID);
+          $sth->bindParam("todoText", $todoText);
+          $sth->bindParam("isChecked", $checkedDefault);
           $sth->execute();
           $newTodoID = $this->dbconnection->lastInsertId();
-          $sql ="SELECT * FROM todos WHERE todo_id=:newTodoID";
+          $sql ="SELECT * FROM todos WHERE todoID=:newTodoID";
           $sth = $this->dbconnection->prepare($sql);
           $sth->bindParam("newTodoID", $newTodoID);
           $sth->execute();
@@ -101,68 +101,71 @@ use Rememberly\Validation\BodyValidator;
           $this->setHttpCode(201);
           $this->isSuccess(true);
       } catch (\PDOException $e) {
-        $this->setResponse(array('message' => "Unknown errorrrr."));
+        $this->setResponse(array('message' => "Unknown error."));
         $this->setHttpCode(500);
         $this->isSuccess(false);
       }
     }
     public function getTodos($listID) {
-      $sql = "SELECT list_id, created_at, expires_on, todo_text, todo_id, is_checked
-      FROM todos WHERE list_id=:list_id";
+      $sql = "SELECT listID, createdAt, expiresOn, todoText, todoID, isChecked
+      FROM todos WHERE listID=:listID";
       $sth = $this->dbconnection->prepare($sql);
-      $sth->bindParam("list_id", $listID);
+      $sth->bindParam("listID", $listID);
       $sth->execute();
       return ($sth->fetchAll());
     }
-    public function createTodolist($list_name, $userID) {
-      $sql = "INSERT INTO todolists (list_name, owner) VALUES (:list_name, :user_id)";
+    public function createTodolist($listName, $userID) {
+      $sql = "INSERT INTO todolists (listName, owner) VALUES (:listName, :userID)";
       $sth = $this->dbconnection->prepare($sql);
-      $sth->bindParam("list_name", $list_name);
-      $sth->bindParam("user_id", $userID);
+      $sth->bindParam("listName", $listName);
+      $sth->bindParam("userID", $userID);
       $sth->execute();
-      //  set list_id to the auto increment value from DB
+      //  set listID to the auto increment value from DB
       $listID = $this->dbconnection->lastInsertId();
-      $input['list_id'] = $listID;
-      $this->setTodolistPermissions($userID, $listID);
-      $sql = "SELECT * FROM todolists WHERE list_id = :list_id";
+      $input['listID'] = $listID;
+      // Done by trigger
+      // $this->setTodolistPermissions($userID, $listID);
+      $sql = "SELECT * FROM todolists WHERE listID = :listID";
       $sth = $this->dbconnection->prepare($sql);
-      $sth->bindParam("list_id", $listID);
+      $sth->bindParam("listID", $listID);
       $sth->execute();
       $responseObject = $sth->fetch();
       $sth = null;
       return $responseObject;
     }
     public function deleteTodolist($listID) {
-      $sql = "DELETE FROM todolists WHERE list_id=:list_id";
+      $sql = "DELETE FROM todolists WHERE listID=:listID";
       $sth = $this->dbconnection->prepare($sql);
-      $sth->bindParam("list_id", $listID);
+      $sth->bindParam("listID", $listID);
       $sth->execute();
-      $this->deleteTodolistPermissions($listID);
-      $this->deleteTodos($listID);
+      //$this->deleteTodolistPermissions($listID);
+      //$this->deleteTodos($listID);
       $sth = null;
     }
-    public function updateTodolist($listID, $list_name) {
-      $sql = "UPDATE todolists SET list_name = :list_name WHERE list_id = :list_id";
+    public function updateTodolist($listID, $listName) {
+      $sql = "UPDATE todolists SET listName = :listName WHERE listID = :listID";
       $sth = $this->dbconnection->prepare($sql);
-      $sth->bindParam("list_name", $list_name);
-      $sth->bindParam("list_id", $listID);
+      $sth->bindParam("listName", $listName);
+      $sth->bindParam("listID", $listID);
       $sth->execute();
       $sth = null;
     }
     public function deleteTodos($listID) {
-      $sql = "DELETE FROM todos WHERE list_id=:list_id";
+      $sql = "DELETE FROM todos WHERE listID=:listID";
       $sth = $this->dbconnection->prepare($sql);
-      $sth->bindParam("list_id", $listID);
+      $sth->bindParam("listID", $listID);
       $sth->execute();
       $sth = null;
     }
     public function setTodolistShared($listID) {
-      $sql = "UPDATE todolists SET isShared = :isShared WHERE list_id = :list_id";
+      $sql = "UPDATE todolists SET isShared = :isShared WHERE listID = :listID";
       try {
+      $a = 1;
       $sth = $this->dbconnection->prepare($sql);
-      $sth->bindParam("isShared", $a = 1);
-      $sth->bindParam("list_id", $listID);
+      $sth->bindParam("isShared", $a);
+      $sth->bindParam("listID", $listID);
       $sth->execute();
+      $responseObject = new \stdClass;
     } catch (\PDOException $e) {
             $responseObject->message = $e->getMessage();
             return $responseObject;
@@ -170,16 +173,16 @@ use Rememberly\Validation\BodyValidator;
     $responseObject->message = "Todolist successfully shared";
     return $responseObject;
     }
-  public function updateTodoWithExpiration($expires_on, $todo_text, $todo_id, $is_checked, $listID) {
+  public function updateTodoWithExpiration($expiresOn, $todoText, $todoID, $isChecked, $listID) {
     $responseObject;
   try {
-      $sql = "UPDATE todos SET expires_on = :expires_on, is_checked = :is_checked, todo_text = :todo_text
-      WHERE todo_id = :todo_id";
+      $sql = "UPDATE todos SET expiresOn = :expiresOn, isChecked = :isChecked, todoText = :todoText
+      WHERE todoID = :todoID";
       $sth = $this->dbconnection->prepare($sql);
-      $sth->bindValue("expires_on", $expires_on);
-      $sth->bindParam("is_checked", $is_checked);
-      $sth->bindParam("todo_text", $todo_text);
-      $sth->bindParam("todo_id", $todo_id);
+      $sth->bindValue("expiresOn", $expiresOn);
+      $sth->bindParam("isChecked", $isChecked);
+      $sth->bindParam("todoText", $todoText);
+      $sth->bindParam("todoID", $todoID);
       $sth->execute();
       $this->removeOldTodos($listID);
   } catch (\PDOException $e) {
@@ -189,15 +192,15 @@ use Rememberly\Validation\BodyValidator;
   $responseObject->message = "Todo successfully updated";
   return $responseObject;
 }
-public function updateTodo($todo_id, $is_checked, $todo_text, $listID) {
-  $responseObject;
+public function updateTodo($todoID, $isChecked, $todoText, $listID) {
+  $responseObject = new \stdClass;
 try {
-    $sql = "UPDATE todos SET is_checked = :is_checked, todo_text = :todo_text
-    WHERE todo_id = :todo_id";
+    $sql = "UPDATE todos SET isChecked = :isChecked, todoText = :todoText
+    WHERE todoID = :todoID";
     $sth = $this->dbconnection->prepare($sql);
-    $sth->bindParam("is_checked", $is_checked);
-    $sth->bindParam("todo_text", $todo_text);
-    $sth->bindParam("todo_id", $todo_id);
+    $sth->bindParam("isChecked", $isChecked);
+    $sth->bindParam("todoText", $todoText);
+    $sth->bindParam("todoID", $todoID);
     $sth->execute();
     $this->removeOldTodos($listID);
 } catch (\PDOException $e) {
@@ -209,17 +212,18 @@ return $responseObject;
 }
   private function removeOldTodos($listID) {
     try {
-      $sql = "DELETE FROM todos WHERE todo_id IN
-      (SELECT todo_id FROM
-        (SELECT todo_id FROM todos
-          WHERE list_id = :list_id
-          AND is_checked = :is_checked
-          order by created_at DESC LIMIT 15, 50
+      $sql = "DELETE FROM todos WHERE todoID IN
+      (SELECT todoID FROM
+        (SELECT todoID FROM todos
+          WHERE listID = :listID
+          AND isChecked = :isChecked
+          order by createdAt DESC LIMIT 15, 50
         ) a
       )";
     $sth = $this->dbconnection->prepare($sql);
-    $sth->bindParam("list_id", $listID);
-    $sth->bindParam("is_checked", $a = 1);
+    $a = 1;
+    $sth->bindParam("listID", $listID);
+    $sth->bindParam("isChecked", $a);
     $sth->execute();
     } catch (\PDOException $e) {
       $responseObject->message = "An Error occured";
@@ -228,7 +232,7 @@ return $responseObject;
 
     private function todoWithExpiration($input)
     {
-      return isset($input['expires_on']);
+      return isset($input['expiresOn']);
     }
 
     private function setHttpCode($value)

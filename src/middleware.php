@@ -9,6 +9,7 @@ $pdo = new PDO("mysql:host=" . $settings['host'] . ";dbname=" . $settings['dbnam
 $app->add(new Tuupola\Middleware\HttpBasicAuthentication([
     "path" => "/login",
     "realm" => "Protected",
+    "secure" => false,
     "authenticator" => new PdoAuthenticator([
         "pdo" => $pdo,
         "table" => "users",
@@ -21,6 +22,7 @@ $app->add(new \Tuupola\Middleware\JwtAuthentication([
     "attribute" => "decoded_token_data",
     "secret" => getenv('REM_TOKEN_ENV'),
     "algorithm" => ["HS256"],
+    "secure" => false,
     "error" => function ($response, $arguments) {
         $data["status"] = "error";
         $data["message"] = $arguments["message"];

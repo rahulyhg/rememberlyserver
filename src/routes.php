@@ -3,6 +3,7 @@
 use Rememberly\Persistence\TodolistManager;
 use Rememberly\Authentication\TokenManager;
 use Rememberly\Persistence\UserManager;
+use Rememberly\Persistence\NoteManager;
 use Slim\Http\Request;
 use Slim\Http\Response;
 use \Firebase\JWT\JWT;
@@ -10,7 +11,7 @@ use \Firebase\JWT\JWT;
 // Create new Todo for Todolist associated with user
 $app->post('/api/todo/new', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
-    $userID = $token['user_id'];
+    $userID = $token['userID'];
     $todolistPermissions = $token['todolistPermissions'];
     $input = $request->getParsedBody();
     $todolistManager = new TodolistManager($this->db);
@@ -20,24 +21,24 @@ $app->post('/api/todo/new', function (Request $request, Response $response, arra
 // update todo (name, check status,..)
 $app->put('/api/todo/update', function (Request $request, Response $response, array $args) {
   $token = $request->getAttribute("decoded_token_data");
-  $userID = $token['user_id'];
+  $userID = $token['userID'];
   $todolistPermissions = $token['todolistPermissions'];
   $input = $request->getParsedBody();
-  $list_id = $input['list_id'];
-  $expires_on = $input['expires_on'];
-  $todo_text = $input['todo_text'];
-  $todo_id = $input['todo_id'];
-  $is_checked = intval($input['is_checked']);
-  $this->logger->info("Update Todo with Check Status: " . $is_checked);
-  $databaseOperator = new DatabaseOperator($this->db);
+  $listID = $input['listID'];
+  $todoText = $input['todoText'];
+  $todoID = $input['todoID'];
+  $isChecked = intval($input['isChecked']);
+  $this->logger->info("Update Todo with Check Status: " . $isChecked);
+  $todolistManager = new TodolistManager($this->db);
   $responseObject;
-  if (in_array($list_id, $todolistPermissions)) {
-    if (isset($expires_on)) {
+  if (in_array($listID, $todolistPermissions)) {
+    if (isset($expiresOn)) {
+      $expiresOn = $input['expiresOn'];
       $this->logger->info("Update todo with expiration");
-      $responseObject = $databaseOperator->updateTodoWithExpiration($expires_on, $todo_text, $todo_id, $is_checked, $list_id);
+      $responseObject = $todolistManager->updateTodoWithExpiration($expiresOn, $todoText, $todoID, $isChecked, $listID);
     } else {
       $this->logger->info("Update todo without expiration");
-      $responseObject = $databaseOperator->updateTodo($todo_id, $is_checked, $todo_text, $list_id);
+      $responseObject = $todolistManager->updateTodo($todoID, $isChecked, $todoText, $listID);
     }
   } else {
     $responseObject->message = "Not authorized!";
@@ -46,15 +47,15 @@ $app->put('/api/todo/update', function (Request $request, Response $response, ar
   return $this->response->withJson($responseObject);
 });
 // Get all todos of a list with list id
-$app->get('/api/todos/[{list_id}]', function (Request $request, Response $response, array $args) {
+$app->get('/api/todos/[{listID}]', function (Request $request, Response $response, array $args) {
   $token = $request->getAttribute("decoded_token_data");
-  $userID = $token['user_id'];
+  $userID = $token['userID'];
   $permissions = $token['todolistPermissions'];
-  $list_id = $args['list_id'];
+  $listID = $args['listID'];
   $responseObject;
-  if (in_array($list_id, $permissions)) {
-    $databaseOperator = new DatabaseOperator($this->db);
-    $responseObject = $databaseOperator->getTodos($list_id);
+  if (in_array($listID, $permissions)) {
+    $todolistManager = new TodolistManager($this->db);
+    $responseObject = $todolistManager->getTodos($listID);
   } else {
     $responseObject->message = "No permissions or list not found";
   }
@@ -63,52 +64,58 @@ $app->get('/api/todos/[{list_id}]', function (Request $request, Response $respon
 // get a new token with an old token (which is still valid and not older than 2h)
 $app->post('/api/tokenrefresh', function (Request $request, Response $response, array $args) {
    $token = $request->getAttribute("decoded_token_data");
-   $userID = $token['user_id'];
+   $userID = $token['userID'];
    $username = $token['username'];
    // Maybe the permissions have changed
-   $databaseOperator = new DatabaseOperator($this->db);
-   $todolistPermissions = $databaseOperator->getUserTodolistPermissions($userID);
-   $noticesPermissions = $databaseOperator->getUserNoticesPermissions($userID);
+   $userManager = new UserManager($this->db);
+   $todolistPermissions = $userManager->getUserTodolistPermissions($userID);
+   $notePermissions = $userManager->getUserNotePermissions($userID);
    $androidAppID = $token['androidAppID'];
    $tokenManager = new TokenManager($this->get('settings'));
-   $token = $tokenManager->createUserToken($userID, $username, $todolistPermissions, $noticesPermissions, $androidAppID);
+   $token = $tokenManager->createUserToken($userID, $username, $todolistPermissions, $notePermissions, $androidAppID);
    return $this->response->withJson(['token' => $token]);
 });
 // Endpoint should return Statuscode 401 if token is no more valid
 $app->post('/api/tokenlogin', function (Request $request, Response $response, array $args) {
    return $this->response->withJson(['message' => "Login successful"]);
 });
-// update a notice's name
-$app->put('/api/notice/update', function (Request $request, Response $response, array $args) {
+// update a note's name
+$app->put('/api/note/update', function (Request $request, Response $response, array $args) {
   $token = $request->getAttribute("decoded_token_data");
   $input = $request->getParsedBody();
-  $noticeID = $input['noticeID'];
-  $noticeName = $input['noticeName'];
-  $permissions = $token['noticesPermissions'];
-  if (in_array($noticeID, $permissions)) {
-    $databaseOperator = new DatabaseOperator($this->db);
-    $databaseOperator->updateNotice($noticeID, $noticeName);
+  $noteID = $input['noteID'];
+  $noteName = $input['noteName'];
+  $permissions = $token['notePermissions'];
+  if (in_array($noteID, $permissions)) {
+    $noteManager = new NoteManager($this->db);
+    if (isset($input['noteContent'])) {
+      $noteContent = $input['noteContent'];
+      $noteManager->updateNote($noteID, $noteName, $noteContent, null);
+    }
+    $noteManager->updateNote($noteID, $noteName, null, null);
   } else {
     // Deletion forbidden (not owner)
     return $this->response->withStatus(403);
   }
-  $returnMessage->message = "Notice updated";
+  $returnMessage = new \stdClass;
+  $returnMessage->message = "Note updated";
   return $this->response->withJson($returnMessage);
 });
 // update todolist name
 $app->put('/api/todolist/update', function (Request $request, Response $response, array $args) {
   $token = $request->getAttribute("decoded_token_data");
   $input = $request->getParsedBody();
-  $list_id = $input['list_id'];
-  $list_name = $input['list_name'];
+  $listID = $input['listID'];
+  $listName = $input['listName'];
   $permissions = $token['todolistPermissions'];
-  if (in_array($list_id, $permissions)) {
-    $databaseOperator = new DatabaseOperator($this->db);
-    $databaseOperator->updateTodolist($list_id, $list_name);
+  if (in_array($listID, $permissions)) {
+    $todolistManager = new TodolistManager($this->db);
+    $todolistManager->updateTodolist($listID, $listName);
   } else {
     // Update forbidden (not owner)
     return $this->response->withStatus(403);
   }
+  $returnMessage = new \stdClass;
   $returnMessage->message = "Todolist updated";
   return $this->response->withJson($returnMessage);
 });
@@ -116,13 +123,13 @@ $app->put('/api/todolist/update', function (Request $request, Response $response
 $app->post('/api/todolist/new', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
     // TODO: Error Handling
-    $userID = $token['user_id'];
+    $userID = $token['userID'];
     $input = $request->getParsedBody();
-    $list_name = $input['list_name'];
+    $listName = $input['listName'];
     // set permissions in DB and create new todolist
-    if (isset($list_name)) {
-      $databaseOperator = new DatabaseOperator($this->db);
-      $responseObject = $databaseOperator->createTodolist($input['list_name'], $userID);
+    if (isset($listName)) {
+      $todolistManager = new TodolistManager($this->db);
+      $responseObject = $todolistManager->createTodolist($input['listName'], $userID);
       return $this->response->withJson($responseObject, 201);
     } else {
       $jsonResponse = array('message' => "Listname not found.", 'status' => 404);
@@ -131,39 +138,40 @@ $app->post('/api/todolist/new', function (Request $request, Response $response, 
     }
 });
 // create a new note
-$app->post('/api/notice/new', function (Request $request, Response $response, array $args) {
+$app->post('/api/note/new', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
     // TODO: Error Handling
-    $userID = $token['user_id'];
+    $userID = $token['userID'];
     $input = $request->getParsedBody();
     // set permissions in DB and create new note
-    $databaseOperator = new DatabaseOperator($this->db);
-    $responseObject = $databaseOperator->createNotice($input['noticeName'], $userID);
+    $noteManager = new NoteManager($this->db);
+    $responseObject = $noteManager->createNote($input['noteName'], $userID);
     return $this->response->withJson($responseObject);
 });
-// delete todolist with list_id
-$app->delete('/api/todolist/delete/[{list_id}]', function (Request $request, Response $response, array $args) {
+// delete todolist with listID
+$app->delete('/api/todolist/delete/[{listID}]', function (Request $request, Response $response, array $args) {
   $token = $request->getAttribute("decoded_token_data");
-  $list_id = $args['list_id'];
+  $listID = $args['listID'];
   $permissions = $token['todolistPermissions'];
-  $databaseOperator = new DatabaseOperator($this->db);
-  if (in_array($list_id, $permissions)) {
-    $databaseOperator->deleteTodolist($list_id);
+  $todolistManager = new TodolistManager($this->db);
+  if (in_array($listID, $permissions)) {
+    $todolistManager->deleteTodolist($listID);
   } else {
     // Deletion forbidden (not owner)
     return $this->response->withStatus(403);
   }
-  $jsonResponse = array('message' => "Todolist with ID " . $list_id . " deleted.");
+  $jsonResponse = array('message' => "Todolist deleted.");
   return $this->response->withJson($jsonResponse, 200);
 });
-// delete notice with noticeID
-$app->delete('/api/notice/delete/[{noticeID}]', function (Request $request, Response $response, array $args) {
+// delete note with noteID
+$app->delete('/api/note/delete/[{noteID}]', function (Request $request, Response $response, array $args) {
   $token = $request->getAttribute("decoded_token_data");
-  $noticeID = $args['noticeID'];
-  $permissions = $token['noticesPermissions'];
-  $databaseOperator = new DatabaseOperator($this->db);
-  if (in_array($noticeID, $permissions)) {
-    $databaseOperator->deleteNotice($noticeID);
+  $noteID = $args['noteID'];
+  $permissions = $token['notePermissions'];
+  $noteManager = new NoteManager($this->db);
+  $returnMessage = new \stdClass;
+  if (in_array($noteID, $permissions)) {
+    $noteManager->deletenote($noteID);
   } else {
     // Deletion forbidden (not owner)
     return $this->response->withStatus(403);
@@ -175,42 +183,48 @@ $app->delete('/api/notice/delete/[{noticeID}]', function (Request $request, Resp
 $app->post('/api/todolist/share', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
     $parsedBody = $request->getParsedBody();
-    $list_id = $parsedBody['list_id'];
+    $listID = $parsedBody['listID'];
     $username = $parsedBody['username'];
     $todolistPermissions = $token['todolistPermissions'];
-    $responseObject;
-    if (in_array($list_id, $todolistPermissions)) {
+    $responseObject = new \stdClass;
+    if (in_array($listID, $todolistPermissions)) {
       // set permissions to new user
       try {
-      $databaseOperator = new DatabaseOperator($this->db);
-      $userID = $databaseOperator->getUserID($username);
-      $databaseOperator->setTodolistPermissions($userID, $list_id);
-      $databaseOperator->setTodolistShared($list_id);
+      $userManager = new UserManager($this->db);
+      $todolistManager = new TodolistManager($this->db);
+      $userID = $userManager->getUserID($username);
+      // TODO: Do this by trigger
+      $userManager->setTodolistPermissions($userID, $listID);
+      $todolistManager->setTodolistShared($listID);
       $responseObject->message = "Todolist shared with " . $username;
     } catch (PDOException $pdoe) {
-      return $this->response->withStatus(404);
+      $this->logger->info($pdoe->getMessage());
+      $responseObject->message = "Failed to share Todolist";
+      return $this->response->withJson($responseObject, 404);
     }
     } else {
       $responseObject->message = "Failed to share Todolist";
     }
     return $this->response->withJson($responseObject);
 });
-// share notice with username (username in html body)
-$app->post('/api/notice/share', function (Request $request, Response $response, array $args) {
+// share note with username (username in html body)
+$app->post('/api/note/share', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
     $parsedBody = $request->getParsedBody();
-    $noticeID = $parsedBody['noticeID'];
+    $noteID = $parsedBody['noteID'];
     $username = $parsedBody['username'];
-    $noticesPermissions = $token['noticesPermissions'];
-    $responseObject;
-    if (in_array($noticeID, $noticesPermissions)) {
+    $notePermissions = $token['notePermissions'];
+    $responseObject = new \stdClass;
+    if (in_array($noteID, $notePermissions)) {
       // set permissions to new user
       try {
-      $databaseOperator = new DatabaseOperator($this->db);
-      $userID = $databaseOperator->getUserID($username);
-      $databaseOperator->setNoticePermissions($userID, $noticeID);
-      $databaseOperator->setNoticeShared($noticeID);
-      $responseObject->message = "Notice shared with " . $username;
+      $userManager = new UserManager($this->db);
+      $noteManager = new NoteManager($this->db);
+      $userID = $userManager->getUserID($username);
+      // TODO: Do this by trigger
+      $userManager->setNotePermissions($userID, $noteID);
+      $noteManager->setNoteShared($noteID);
+      $responseObject->message = "note shared with " . $username;
     } catch (PDOException $pdoe) {
       return $this->response->withStatus(404);
     }
@@ -220,16 +234,16 @@ $app->post('/api/notice/share', function (Request $request, Response $response, 
     return $this->response->withJson($responseObject);
 });
 // Get TodoList of User
-$app->get('/api/todolist/[{list_id}]', function (Request $request, Response $response, array $args) {
+$app->get('/api/todolist/[{listID}]', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
-    $userID = $token['user_id'];
+    $userID = $token['userID'];
     $permissions = $token['todolistPermissions'];
     $in  = str_repeat('?,', count($permissions) - 1) . '?';
-    $this->logger->info("User ID: " . $userID . " is trying to access list with ID: " . $args['list_id']
+    $this->logger->info("User ID: " . $userID . " is trying to access list with ID: " . $args['listID']
   . " with permissions to lists: " . print_r($permissions, true));
-    $sql = "SELECT * FROM todolists WHERE list_id=? AND list_id IN ($in)";
+    $sql = "SELECT * FROM todolists WHERE listID=? AND listID IN ($in)";
     $sth = $this->db->prepare($sql);
-    $params = array_merge([$args['list_id']], $permissions);
+    $params = array_merge([$args['listID']], $permissions);
     $sth->execute($params);
     $todolist = $sth->fetchObject();
     // false if none found or no permission
@@ -243,11 +257,11 @@ $app->get('/api/todolist/[{list_id}]', function (Request $request, Response $res
 // Get all Todolists associated with user id
 $app->get('/api/todolists', function (Request $request, Response $response, array $args) {
     $token = $request->getAttribute("decoded_token_data");
-        $userID = $token['user_id'];
+        $userID = $token['userID'];
         $todolistPermissions = $token['todolistPermissions'];
         $in  = str_repeat('?,', count($todolistPermissions) - 1) . '?';
         $this->logger->info("User has permission to access lists: " . print_r($todolistPermissions, true));
-        $sql = "SELECT * FROM todolists WHERE list_id IN ($in)";
+        $sql = "SELECT * FROM todolists WHERE listID IN ($in)";
         $sth = $this->db->prepare($sql);
         try {
         $sth->execute($todolistPermissions);
@@ -258,19 +272,19 @@ $app->get('/api/todolists', function (Request $request, Response $response, arra
         return $this->response->withStatus(404);
       }
     });
-    // get all notices of user
-    $app->get('/api/notices', function (Request $request, Response $response, array $args) {
+    // get all notes of user
+    $app->get('/api/notes', function (Request $request, Response $response, array $args) {
         $token = $request->getAttribute("decoded_token_data");
-            $userID = $token['user_id'];
-            $noticesPermissions = $token['noticesPermissions'];
-            $in  = str_repeat('?,', count($noticesPermissions) - 1) . '?';
-            $this->logger->info("User has permission to access notices: " . print_r($noticesPermissions, true));
-            $sql = "SELECT * FROM notices WHERE noticeID IN ($in)";
+            $userID = $token['userID'];
+            $notePermissions = $token['notePermissions'];
+            $in  = str_repeat('?,', count($notePermissions) - 1) . '?';
+            $this->logger->info("User has permission to access notes: " . print_r($notePermissions, true));
+            $sql = "SELECT * FROM notes WHERE noteID IN ($in)";
             $sth = $this->db->prepare($sql);
             try {
-            $sth->execute($noticesPermissions);
-            $notices = $sth->fetchAll(); // false if none found or no permission
-            return $this->response->withJson($notices);
+            $sth->execute($notePermissions);
+            $notes = $sth->fetchAll(); // false if none found or no permission
+            return $this->response->withJson($notes);
           } catch (PDOException $pdoe) {
             // no permissions found
             return $this->response->withStatus(404);
@@ -292,9 +306,9 @@ $app->post('/user/create', function ($request, $response, $args) {
     if (isset($parsedBody['user']) && isset($parsedBody['password'])) {
       $user = $parsedBody['user'];
       $password = $parsedBody['password'];
-      $databaseOperator = new DatabaseOperator($this->db);
+      $userManager = new UserManager($this->db);
       // return message
-      $jsonResponse = $databaseOperator->createUser($user, $password);
+      $jsonResponse = $userManager->createUser($user, $password);
       $statusCode = $jsonResponse["status"];
       return $this->response->withJson($jsonResponse, $statusCode);
     } else {
@@ -312,10 +326,10 @@ $app->get('/login', function (Request $request, Response $response, array $args)
         $tokenManager = new TokenManager($this->get('settings'));
         $userID = $userManager->getUserID($username);
         $todolistPermissions = $userManager->getUserTodolistPermissions($userID);
-        $notices_permissions = $userManager->getUserNoticesPermissions($userID);
+        $notePermissions = $userManager->getUserNotePermissions($userID);
         $androidAppID = $userManager->getAndroidAppID($userID);
         $token = $tokenManager->createUserToken($userID, $username,
-         $todolistPermissions, $notices_permissions, $androidAppID);
+         $todolistPermissions, $notePermissions, $androidAppID);
         return $this->response->withJson(['token' => $token]);
     }
 });

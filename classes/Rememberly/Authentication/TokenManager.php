@@ -11,15 +11,15 @@ class TokenManager
     {
         $this->settings = $settings;
     }
-    public function createUserToken($user_id, $username, $todolistPermissions, $noticesPermissions, $androidAppID)
+    public function createUserToken($userID, $username, $todolistPermissions, $notePermissions, $androidAppID)
     {
         $iat = time();
         $exp = time() + 7200; // Token expires after 2 Hours
   // TODO: Add REG_ID from Android
   $settingsArray = $this->settings->get('settings'); // get settings array.
   $token = JWT::encode(
-      ['user_id' => $user_id, 'username' => $username, 'todolistPermissions' => $todolistPermissions,
-  'noticesPermissions' => $noticesPermissions, 'androidAppID' => $androidAppID, 'iat' => $iat, 'exp' => $exp],
+      ['userID' => $userID, 'username' => $username, 'todolistPermissions' => $todolistPermissions,
+  'notePermissions' => $notePermissions, 'androidAppID' => $androidAppID, 'iat' => $iat, 'exp' => $exp],
    $this->settings['jwt']['secret'],
       "HS256"
   );

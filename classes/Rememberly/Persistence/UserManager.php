@@ -9,9 +9,9 @@ namespace Rememberly\Persistence;
       {
           $this->dbconnection = $dbconnection;
       }
-      public function getUserTodolistPermissions($user_id)
+      public function getUserTodolistPermissions($userID)
       {
-          $query = "SELECT list_id FROM todolistPermissions WHERE user_id='$user_id'";
+          $query = "SELECT listID FROM todolistPermissions WHERE userID='$userID'";
           $sth = $this->dbconnection->prepare($query);
           $sth->execute();
           $resultPermissions = "";
@@ -26,9 +26,9 @@ namespace Rememberly\Persistence;
           }
           return explode(',', $resultPermissions);
       }
-      public function getUserNoticesPermissions($user_id)
+      public function getUserNotePermissions($userID)
       {
-          $query = "SELECT noticeID FROM noticesPermissions WHERE userID='$user_id'";
+          $query = "SELECT noteID FROM notePermissions WHERE userID='$userID'";
           $sth = $this->dbconnection->prepare($query);
           $sth->execute();
           $resultPermissions = "";
@@ -45,16 +45,16 @@ namespace Rememberly\Persistence;
       }
       public function getUserID($username)
       {
-          $sqluser = "SELECT user_id FROM users WHERE username='$username'";
+          $sqluser = "SELECT userID FROM users WHERE username='$username'";
           $sth = $this->dbconnection->prepare($sqluser);
           $sth->execute();
           $res = $sth->fetch(\PDO::FETCH_ASSOC);
-          return $res['user_id'];
+          return $res['userID'];
       }
-      public function getAndroidAppID($user_id) {
-        $sql = "SELECT androidAppID FROM users WHERE user_id = :user_id";
+      public function getAndroidAppID($userID) {
+        $sql = "SELECT androidAppID FROM users WHERE userID = :userID";
         $sth = $this->dbconnection->prepare($sql);
-        $sth->bindParam("user_id", $user_id);
+        $sth->bindParam("userID", $userID);
         $sth->execute();
         $res = $sth->fetch(\PDO::FETCH_ASSOC);
         return $res['androidAppID'];
@@ -76,32 +76,32 @@ namespace Rememberly\Persistence;
               }
           return $jsonResponse;
       }
-      public function deleteTodolistPermissions($list_id) {
-        $sql = "DELETE FROM todolistPermissions WHERE list_id=:list_id";
+      public function deleteTodolistPermissions($listID) {
+        $sql = "DELETE FROM todolistPermissions WHERE listID=:listID";
         $sth = $this->dbconnection->prepare($sql);
-        $sth->bindParam("list_id", $list_id);
+        $sth->bindParam("listID", $listID);
         $sth->execute();
         $sth = null;
       }
-      public function deleteNoticePermissions($noticeID) {
-        $sql = "DELETE FROM noticesPermissions WHERE noticeID=:noticeID";
+      public function deleteNotePermissions($noteID) {
+        $sql = "DELETE FROM notePermissions WHERE noteID=:noteID";
         $sth = $this->dbconnection->prepare($sql);
-        $sth->bindParam("noticeID", $noticeID);
+        $sth->bindParam("noteID", $noteID);
         $sth->execute();
         $sth = null;
       }
       public function setTodolistPermissions($userID, $listID) {
-        $sql = "INSERT INTO todolistPermissions (list_id, user_id) VALUES (:list_id, :user_id)";
+        $sql = "INSERT INTO todolistPermissions (listID, userID) VALUES (:listID, :userID)";
         $sth = $this->dbconnection->prepare($sql);
-        $sth->bindParam("list_id", $listID);
-        $sth->bindParam("user_id", $userID);
+        $sth->bindParam("listID", $listID);
+        $sth->bindParam("userID", $userID);
         $sth->execute();
         $sth = null;
       }
-      public function setNoticePermissions($userID, $noticeID) {
-        $sql = "INSERT INTO noticesPermissions (noticeID, userID) VALUES (:noticeID, :userID)";
+      public function setNotePermissions($userID, $noteID) {
+        $sql = "INSERT INTO notePermissions (noteID, userID) VALUES (:noteID, :userID)";
         $sth = $this->dbconnection->prepare($sql);
-        $sth->bindParam("noticeID", $noticeID);
+        $sth->bindParam("noteID", $noteID);
         $sth->bindParam("userID", $userID);
         $sth->execute();
         $sth = null;

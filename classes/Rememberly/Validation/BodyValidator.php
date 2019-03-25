@@ -6,9 +6,9 @@ namespace Rememberly\Validation;
   {
     public static function validateNewTodo($input)
     {
-      if ((isset($input['list_id']) && isset($input['todo_text']) &&
-    isset($input['expires_on'])) ||
-  (isset($input['list_id']) && isset($input['todo_text']))) {
+      if ((isset($input['listID']) && isset($input['todoText']) &&
+    isset($input['expiresOn'])) ||
+  (isset($input['listID']) && isset($input['todoText']))) {
     return true;
   } else {
     return false;
